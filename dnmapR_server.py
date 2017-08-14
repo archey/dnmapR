@@ -1,9 +1,9 @@
 #! /usr/bin/env python
 # dnmapR_server.py is a revised and updated version of dnmap_server.py
 # GPL v3
-# Opsdisk LLC | opsdisk.com 
+# Opsdisk LLC | opsdisk.com
 
-# dnmap version modified: .6 
+# dnmap version modified: .6
 # http://sourceforge.net/projects/dnmap
 
 # Copyright (C) 2009  Sebastian Garcia
@@ -46,7 +46,7 @@ try:
 except:
     print '[-] Python openssl library required: apt-get install python-openssl'
     exit(-1)
-    
+
 # twisted check
 try:
     from twisted.internet.protocol import Factory, Protocol
@@ -57,8 +57,8 @@ except:
     print '[-] Python twisted library required: '
     print 'apt-get install python-twisted-bin python-twisted-core'
     exit(-1)
-    
-    
+
+
 # Global variables
 vernum = '1.0'
 nmapCommandsFile = ''
@@ -89,7 +89,7 @@ def timeout_idle_clients():
             timeDiff = now - clients[clientID]['LastTime']
             if timeDiff.seconds >= clientTimeout:
                 clients[clientID]['Status'] = 'Offline'
-                
+
     except Exception as inst:
         if verboseLevel > 2:
             msgline = '[-] Problem in mark_as_idle function'
@@ -104,8 +104,8 @@ def timeout_idle_clients():
             msgline = inst
             mlog.error(msgline)
             print msgline
-            
-            
+
+
 def read_file_and_fill_nmap_variable():
     """
     Here we fill the nmapCommand with the lines of the txt file. Only the first time. Later this file should be filled automatically
@@ -131,7 +131,7 @@ def read_file_and_fill_nmap_variable():
             # We already have a trace file. We must be reading the same original file again after some running...
             traceFileDescriptor.seek(0)
             lastLine = traceFileDescriptor.readline()
-            
+
             # Search for the line stored in the trace file
             # This allow us to CTRL-C the server and reload it again without having to worry about were where we reading commends.
             otherline = fileDescriptor.readline()
@@ -165,11 +165,11 @@ def read_file_and_fill_nmap_variable():
         line = fileDescriptor.readline()
         filePosition = fileDescriptor.tell()
         linesRead += 1
-    
+
     msgline = 'Command lines read: {0}'.format(linesRead)
     mlog.debug(msgline)
-    
-    
+
+
 class ServerContextFactory:
     global mlog
     global verboseLevel
@@ -179,7 +179,7 @@ class ServerContextFactory:
     def getContext(self):
         """
         Create an SSL context.
-        This is a sample implementation that loads a certificate from a file 
+        This is a sample implementation that loads a certificate from a file
         called 'server.pem'.
         """
         ctx = SSL.Context(SSL.SSLv23_METHOD)
@@ -189,8 +189,8 @@ class ServerContextFactory:
         except:
             print '[-] You need to have a PEM file for the server to work. If it is not in your same directory, just point to it with -P switch'
         return ctx
-        
-        
+
+
 def show_info():
     global verboseLevel
     global mlog
@@ -212,7 +212,7 @@ def show_info():
             line = '=| MET:{0} | Online clients: {1} |='.format(diffTime, amount)
             print line
             mlog.info(line)
-            
+
         if clients != {}:
             if verboseLevel > 1:
                 line = 'Clients connected'
@@ -239,14 +239,14 @@ def show_info():
                         uptimeDiff = datetime.datetime.now() - clients[i]['FirstTime']
                         uptimeDiffHours = int( (uptimeDiff.seconds + (uptimeDiff.microseconds / 1000000.0)) / 3600)
                         uptimeDiffMins = int( ((uptimeDiff.seconds % 3600) + (uptimeDiff.microseconds / 1000000.0)) / 60)
-                        
+
                         line = '{0:15}\t{1}\t\t{2}({3:2d}\'{4:2d}\")\t{5:2d}h{6:2d}m\t\t{7}\t{8}\t{9:10.1f}\t{10:9.1f}\t{11}'.format(clients[i]['Alias'], clients[i]['NbrCommands'], lasttime, timeDiffMins, timeDiffSecs, uptimeDiffHours, uptimeDiffMins , clients[i]['Version'], clients[i]['IsRoot'], clients[i]['RunCmdsxMin'], clients[i]['AvrCmdsxMin'], clients[i]['Status'])
                         print line
                         mlog.info(line)
-                        
+
             print
             lastShowTime = datetime.datetime.now()
-            
+
     except Exception as inst:
         if verboseLevel > 2:
             msgline = '[-] Problem in show_info function'
@@ -261,18 +261,18 @@ def show_info():
             msgline = inst
             mlog.error(msgline)
             print msgline
-    
+
 def send_one_more_command(ourtransport, clientID):
     # Extract the next command to send.
     global nmapCommand
     global verboseLevel
     global mlog
     global clients
-    
+
     try:
         alias = clients[clientID]['Alias']
         commandToSend = nmapCommand.pop()
-        
+
         line = '[*] Data sent to client ID ' + clientID + ' (' + alias + ')'
         log.msg(line, logLevel=logging.INFO)
         if verboseLevel > 2:
@@ -285,7 +285,7 @@ def send_one_more_command(ourtransport, clientID):
         clients[clientID]['NbrCommands'] += 1
         clients[clientID]['LastCommand'] = commandToSend
         clients[clientID]['Status'] = 'Executing'
-        
+
     except IndexError:
         # If the list of commands is empty, look for new commands
         line = '[*] No more commands in queue.'
@@ -297,7 +297,7 @@ def send_one_more_command(ourtransport, clientID):
         if verboseLevel > 2:
             print line
         ourtransport.transport.write('Wait:10')
-        
+
     except Exception as inst:
         print '[-] Problem in Send More Commands'
         print type(inst)
@@ -311,7 +311,10 @@ def process_input_line(data, ourtransport, clientID):
     global traceFile
     global nmapCommand
     global nmapOutputComingBack
-    global outputFileDescriptor
+    global nmapOutputFile
+    global xmlOutputFile
+    global gnmapOutputFile
+    global outputswitch
 
     try:
         # What to do. Send another command or store the nmap output?
@@ -354,7 +357,7 @@ def process_input_line(data, ourtransport, clientID):
 
         elif 'Send more commands' in data:
             alias = clients[clientID]['Alias']
-            
+
             clients[clientID]['Status'] = 'Online'
             nowtime = datetime.datetime.now()
             clients[clientID]['LastTime'] = nowtime
@@ -368,38 +371,52 @@ def process_input_line(data, ourtransport, clientID):
         elif 'nmap output file' in data and not nmapOutputComingBack:
             # Nmap output start to come back...
             nmapOutputComingBack = True
-            
+            outputswitch = 0
+
             alias = clients[clientID]['Alias']
-            
+
             clients[clientID]['Status'] = 'Online'
-            
+
             # Compute the commands per hour
             # 1 more command. Time is between lasttimeseen and now
             timeSinceCmdStart = datetime.datetime.now() - clients[clientID]['LastTime']
-            
+
             # Cumulative average
             prevCa = clients[clientID]['AvrCmdsxMin']
             clients[clientID]['RunCmdsxMin'] =  60 / (timeSinceCmdStart.seconds + ( timeSinceCmdStart.microseconds / 1000000.0))
             clients[clientID]['AvrCmdsxMin'] = ( clients[clientID]['RunCmdsxMin'] + (clients[clientID]['NbrCommands'] * prevCa) ) / ( clients[clientID]['NbrCommands'] + 1 )
-            
+
             # update the LastTime
             nowtime = datetime.datetime.now()
             clients[clientID]['LastTime'] = nowtime
-            
+
             # Create the dir
             if not os.path.exists('./nmap_results'):
                 os.system('mkdir nmap_results > /dev/null 2>&1')
-            
+
             # Get the output file from the data
-            # We strip \n. 
-            nmapOutputFile = 'nmap_results/' + data.split(':')[1].strip('\n') + '.nmap'
+            # We strip \n.
+            filename = data.split(':')[1].strip('\n')
+            base_dir="nmap_results"
+            xmlOutputFile = "%s/%s.xml"%(base_dir, filename)
+            nmapOutputFile = "%s/%s.nmap"%(base_dir, filename)
+            gnmapOutputFile = "%s/%s.gnmap"%(base_dir, filename)
+            #nmapOutputFile = 'nmap_results/' + data.split(':')[1].strip('\n') + '.nmap'
             if verboseLevel > 2:
-                log.msg('\tNmap output file is: {0}'.format(nmapOutputFile), logLevel=logging.DEBUG)
-                
-            outputFileDescriptor = open(nmapOutputFile, 'a+')
-            outputFileDescriptor.writelines('Client ID:' + clientID + ':Alias:' + alias)
-            outputFileDescriptor.flush()
-            
+                log.msg('\tNmap output file is: {0}'.format(nmapOuputFile), logLevel=logging.DEBUG)
+
+            clientline = 'Client ID:'+clientID+':Alias:'+alias+"\n"
+            with open(nmapOutputFile, 'a+') as f:
+                f.writelines(clientline)
+            with open(xmlOutputFile, 'a+') as f:
+                f.writelines(clientline)
+            with open(gnmapOutputFile, 'a+') as f:
+                f.writelines(clientline)
+
+            #outputFileDescriptor = open(nmapOutputFile, 'a+')
+            #outputFileDescriptor.writelines('Client ID:' + clientID + ':Alias:' + alias)
+            #outputFileDescriptor.flush()
+
         elif 'nmap output finished' not in data and nmapOutputComingBack:
             # Store the output to a file.
             alias = clients[clientID]['Alias']
@@ -408,10 +425,30 @@ def process_input_line(data, ourtransport, clientID):
             nowtime = datetime.datetime.now()
             clients[clientID]['LastTime'] = nowtime
 
+            #print data
+            if "#XMLOUTPUT#" in data:
+                outputswitch=1
+
+            elif "#GNMAPOUTPUT#" in data:
+                outputswitch=2
+
+            else:
+                if outputswitch==0:
+                        with open(nmapOutputFile, 'a+') as f:
+                                f.writelines(data+'\n')
+
+                elif outputswitch==1:
+                        with open(xmlOutputFile, 'a+') as f:
+                                f.writelines(data+'\n')
+
+                elif outputswitch==2:
+                        with open(gnmapOutputFile, 'a+') as f:
+                                f.writelines(data+'\n')
+
             log.msg('\tStoring nmap output for client {0} ({1}).'.format(clientID, alias), logLevel=logging.DEBUG)
-            outputFileDescriptor.writelines(data + '\n')
-            outputFileDescriptor.flush()
-         
+            #outputFileDescriptor.writelines(data + '\n')
+            #outputFileDescriptor.flush()
+
         elif 'nmap output finished' in data and nmapOutputComingBack:
             # Nmap output finished
             nmapOutputComingBack = False
@@ -421,7 +458,7 @@ def process_input_line(data, ourtransport, clientID):
             clients[clientID]['Status'] = 'Online'
             nowtime = datetime.datetime.now()
             clients[clientID]['LastTime'] = nowtime
-        
+
             # Store the finished nmap command in the file, so we can retrieve it if needed later.
             finishedNmapCommand = clients[clientID]['LastCommand']
             traceFileDescriptor = open(traceFile, 'w')
@@ -429,19 +466,20 @@ def process_input_line(data, ourtransport, clientID):
             traceFileDescriptor.writelines(finishedNmapCommand)
             traceFileDescriptor.flush()
             traceFileDescriptor.close()
-            
+
             if verboseLevel > 2:
                 print '[*] Storing command {0} in trace file.'.format(finishedNmapCommand.strip('\n').strip('\r'))
-                
-            outputFileDescriptor.close()
-            
+
+            ouputswitch=0
+
+
     except Exception as inst:
         print '[-] Problem in process_input_line'
         print type(inst)
         print inst.args
         print inst
-        
-        
+
+
 class NmapServerProtocol(Protocol):
     """ This is the function that communicates with the client """
     global mlog
@@ -453,31 +491,31 @@ class NmapServerProtocol(Protocol):
     def connectionMade(self):
         if verboseLevel > 0:
             pass
-            
+
     def connectionLost(self, reason):
         peerHost = self.transport.getPeer().host
         peerPort = str(self.transport.getPeer().port)
         clientID = peerHost + ':' + peerPort
         alias = clients[clientID]['Alias']
-        
+
         if verboseLevel > 1:
             msgline = '[-] Connection lost in the protocol. Reason:{0}'.format(reason)
             msgline2 = '[-] Connection lost for {0} ({1}).'.format(alias, clientID)
             log.msg(msgline, logLevel=logging.DEBUG)
             print msgline2
-            
+
             clients[clientID]['Status'] = 'Offline'
             commandToRedo = clients[clientID]['LastCommand']
             if commandToRedo != '':
                 nmapCommand.append(commandToRedo)
             if verboseLevel > 2:
                 print '[*] Re-inserting command: {0}'.format(commandToRedo)
-                
+
     def dataReceived(self, newdata):
         #global clientID
-        
+
         data = newdata.strip('\r').strip('\n').split('\r\n')
-        
+
         peerHost = self.transport.getPeer().host
         peerPort = str(self.transport.getPeer().port)
         clientID = peerHost + ':' + peerPort
@@ -487,11 +525,11 @@ class NmapServerProtocol(Protocol):
             log.msg('Data received', logLevel=logging.DEBUG)
             log.msg(data, logLevel=logging.DEBUG)
             print '[*] Data received: {0}'.format(data)
-            
+
         for line in data:
             process_input_line(line,self, clientID)
-            
-            
+
+
 def process_nmap_commands(loggerName):
     """ Main function. Here we set up the environment, factory, interface, and port """
     global nmapCommandsFile
@@ -500,36 +538,36 @@ def process_nmap_commands(loggerName):
     global mlog
     global verboseLevel
     global clientTimeout
-    
+
     observer = log.PythonLoggingObserver(loggerName)
     observer.start()
-    
+
     # Create the factory
     factory = Factory()
     factory.protocol = NmapServerProtocol
-    
+
     # Create the time based print
     loop = task.LoopingCall(show_info)
     loop.start(5.0) # call every second
-    
+
     # Create the time based file read
     loop2 = task.LoopingCall(read_file_and_fill_nmap_variable)
     loop2.start(30.0) # call every second
-    
+
     # To mark idle clients as hold
     loop3 = task.LoopingCall(timeout_idle_clients)
     loop3.start(clientTimeout) # call every second
-    
+
     # Create the reactor
     reactor.listenSSL(port, factory, ServerContextFactory(), interface=interface)
     reactor.run()
-    
+
 def network_port_type(data):
     if int(data) >= 0 and int(data) <= 65535:
         return int(data)
     else:
         raise argparse.ArgumentTypeError("{} is not a valid TCP port".format(data))
-        
+
 def main():
     global nmapCommandsFile
     global port
@@ -555,9 +593,9 @@ def main():
     parser.add_argument('-v', dest='verboselevel', action='store', type=int, default=1, help='Verbosity level. Give a number between 1 and 5. Defaults to 1. Level 0 is quiet.')
     parser.add_argument('-t', dest='clienttimeout', action='store', type=int, default=3600, help='Number of seconds before classifying a client as offline. Default is 3600 (1 hour)')
     parser.add_argument('-s', dest='sorttype', default='Status', help='Field to sort the statical value. You can choose from: Alias, #Commands, UpTime, RunCmdXMin, AvrCmdXMin, Status')
-    
+
     args = parser.parse_args()
-    
+
     nmapCommandsFile = args.nmapcommandsfile
     port = args.port
     interface = args.interface
@@ -581,11 +619,11 @@ def main():
     if not ( 0 <= clientTimeout ):
         print "[-] Invalid client timeout. Must be greater than 0."
         sys.exit(-1)
-    
-    print "[*] dnmapR_server version " + vernum 
+
+    print "[*] dnmapR_server version " + vernum
     print "[*] Listening for connections on: " + interface + ":" + str(port)
     print "[*] Log file location: " + logFile
-    
+
     try:
         # Set up logger
         # Set up a specific logger with our desired output level
@@ -597,25 +635,25 @@ def main():
         if not isinstance(numericLevel, int):
             raise ValueError('[-] Invalid log level: %s' % loglevel)
         mlog.setLevel(numericLevel)
-        
+
         # Add the log message handler to the logger
         handler = logging.handlers.RotatingFileHandler(logFile, backupCount=5)
-        
+
         formater = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         handler.setFormatter(formater)
         mlog.addHandler(handler)
         # End logger
-        
+
         # Fill the variable from the file
         read_file_and_fill_nmap_variable()
-        
+
         # Start processing clients
         process_nmap_commands(loggerName)
-        
+
     except KeyboardInterrupt:
         # Handle CTRL-C interrupt.
         print "[!] Keyboard interrupt detected...exiting."
         sys.exit(1)
-        
+
 if __name__ == '__main__':
     main()
