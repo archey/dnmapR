@@ -215,7 +215,7 @@ class NmapClient(LineReceiver):
                         line = 'nmap output finished:{0}:'.format(nmapOutputFile.strip('\n').strip('\r'))
                         if debug:
                                 print '[*] Line sent: {0}'.format(line)
-                        self.sendLine(line)
+                                self.sendLine(line)
 
                         # Move nmap output files to it's directory
                         os.system('mv *.nmap nmap_output > /dev/null 2>&1')
@@ -229,7 +229,7 @@ class NmapClient(LineReceiver):
                         line = 'Send more commands'
                         if debug:
                                 print '[*] Line sent: {0}'.format(line)
-                        self.sendLine(line)
+                                self.sendLine(line)
 
             else:
                 # Unknown command sent to client

@@ -268,6 +268,8 @@ def send_one_more_command(ourtransport, clientID):
     global verboseLevel
     global mlog
     global clients
+    global traceFile
+    global nmapCommandsFile
 
     try:
         alias = clients[clientID]['Alias']
@@ -282,6 +284,19 @@ def send_one_more_command(ourtransport, clientID):
         if verboseLevel > 2:
             print line
         ourtransport.transport.write(commandToSend)
+
+        #remove the cmd from the pending job file and add to the trace file
+        with open(nmapCommandsFile, "r") as f:
+            jobs = f.readlines()
+        jobs.remove(commandToSend)
+        with open(nmapCommandsFile, "w") as f:
+            f.writelines(jobs)
+
+
+        # add to tracefile
+        with open(traceFile, "a+") as f:
+            f.writelines(commandToSend)
+
         clients[clientID]['NbrCommands'] += 1
         clients[clientID]['LastCommand'] = commandToSend
         clients[clientID]['Status'] = 'Executing'
@@ -403,7 +418,7 @@ def process_input_line(data, ourtransport, clientID):
             gnmapOutputFile = "%s/%s.gnmap"%(base_dir, filename)
             #nmapOutputFile = 'nmap_results/' + data.split(':')[1].strip('\n') + '.nmap'
             if verboseLevel > 2:
-                log.msg('\tNmap output file is: {0}'.format(nmapOuputFile), logLevel=logging.DEBUG)
+                log.msg('\tNmap output file is: {0}'.format(nmapOutputFile), logLevel=logging.DEBUG)
 
             clientline = 'Client ID:'+clientID+':Alias:'+alias+"\n"
             with open(nmapOutputFile, 'a+') as f:
@@ -417,7 +432,7 @@ def process_input_line(data, ourtransport, clientID):
             #outputFileDescriptor.writelines('Client ID:' + clientID + ':Alias:' + alias)
             #outputFileDescriptor.flush()
 
-        elif 'nmap output finished' not in data and nmapOutputComingBack:
+        elif nmapOutputComingBack and 'nmap output finished' not in data:
             # Store the output to a file.
             alias = clients[clientID]['Alias']
 
@@ -461,11 +476,22 @@ def process_input_line(data, ourtransport, clientID):
 
             # Store the finished nmap command in the file, so we can retrieve it if needed later.
             finishedNmapCommand = clients[clientID]['LastCommand']
-            traceFileDescriptor = open(traceFile, 'w')
-            traceFileDescriptor.seek(0)
-            traceFileDescriptor.writelines(finishedNmapCommand)
-            traceFileDescriptor.flush()
-            traceFileDescriptor.close()
+            clients[clientID]['LastCommand'] = ''
+
+
+            # clear out the trace file
+            with open(traceFile, 'r') as f:
+                runningJobs = f.readlines()
+            runningJobs.remove(finishedNmapCommand)
+            with open(traceFile, 'w') as f:
+                f.writelines(runningJobs)
+
+
+            #traceFileDescriptor = open(traceFile, 'w')
+            #traceFileDescriptor.seek(0)
+            #traceFileDescriptor.writelines(finishedNmapCommand)
+            #traceFileDescriptor.flush()
+            #traceFileDescriptor.close()
 
             if verboseLevel > 2:
                 print '[*] Storing command {0} in trace file.'.format(finishedNmapCommand.strip('\n').strip('\r'))
@@ -496,7 +522,28 @@ class NmapServerProtocol(Protocol):
         peerHost = self.transport.getPeer().host
         peerPort = str(self.transport.getPeer().port)
         clientID = peerHost + ':' + peerPort
-        alias = clients[clientID]['Alias']
+        try:
+
+            alias = clients[clientID]['Alias']
+        except:
+            msgline = 'No client found in list with id {0}. Moving on...'.format(clientID)
+            log.msg(msgline,logLevel=logging.INFO)
+            return 0
+
+        clients[clientID]['Status'] = 'Offline'
+        commandToRedo = clients[clientID]['LastCommand']
+        if commandToRedo != '':
+            # re-add to job file and queue
+            nmapCommand.append(commandToRedo)
+            with open(nmapCommandsFile, "a+") as f:
+                f.writelines(commandToRedo)
+
+        # clear out trace file
+        with open(traceFile, 'r') as f:
+            runningJobs = f.readlines()
+        runningJobs.remove(commandToRedo)
+        with open(traceFile, 'w') as f:
+            f.writelines(runningJobs)
 
         if verboseLevel > 1:
             msgline = '[-] Connection lost in the protocol. Reason:{0}'.format(reason)
@@ -504,12 +551,12 @@ class NmapServerProtocol(Protocol):
             log.msg(msgline, logLevel=logging.DEBUG)
             print msgline2
 
-            clients[clientID]['Status'] = 'Offline'
-            commandToRedo = clients[clientID]['LastCommand']
-            if commandToRedo != '':
-                nmapCommand.append(commandToRedo)
-            if verboseLevel > 2:
-                print '[*] Re-inserting command: {0}'.format(commandToRedo)
+        #    clients[clientID]['Status'] = 'Offline'
+        #    commandToRedo = clients[clientID]['LastCommand']
+        #    if commandToRedo != '':
+        #        nmapCommand.append(commandToRedo)
+        if verboseLevel > 2:
+            print '[*] Re-inserting command: {0}'.format(commandToRedo)
 
     def dataReceived(self, newdata):
         #global clientID
@@ -580,6 +627,8 @@ def main():
     global clientTimeout
     global sortType
     global pemfile
+    global traceFile
+    global outputFile
 
     startTime = datetime.datetime.now()
 
@@ -643,6 +692,20 @@ def main():
         handler.setFormatter(formater)
         mlog.addHandler(handler)
         # End logger
+        # Get any leftover jobs and populate in jobs/queue
+        traceFile = nmapCommandsFile+'.dnmaptrace'
+        with open(traceFile, 'r') as f:
+            leftover=f.readlines()
+        with open(nmapCommandsFile, 'r') as f:
+            curjobs=f.readlines()
+        for ljob in leftover:
+            if ljob not in curjobs:
+                with open(nmapCommandsFile, 'a+') as f:
+                    f.writelines(ljob)
+
+        #clear trace file
+        with open(traceFile, 'w') as f:
+            f.write("")
 
         # Fill the variable from the file
         read_file_and_fill_nmap_variable()
